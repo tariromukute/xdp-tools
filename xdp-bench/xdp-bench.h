@@ -21,6 +21,7 @@ enum basic_program_mode {
 	BASIC_READ_DATA,
 	BASIC_PARSE_IPHDR,
 	BASIC_SWAP_MACS,
+	BASIC_SWAP_IPS,
 };
 
 enum basic_load_mode {

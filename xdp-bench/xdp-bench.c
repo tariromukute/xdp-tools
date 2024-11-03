@@ -39,6 +39,7 @@ struct enum_val basic_program_modes[] = {
        {"read-data", BASIC_READ_DATA},
        {"parse-ip", BASIC_PARSE_IPHDR},
        {"swap-macs", BASIC_SWAP_MACS},
+	   {"swap-ips", BASIC_SWAP_IPS},
        {NULL, 0}
 };
 

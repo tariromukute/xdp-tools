@@ -90,6 +90,9 @@ static int do_basic(const struct basic_opts *opt, enum xdp_action action)
 	case BASIC_SWAP_MACS:
 		opts.prog_name = (opt->load_mode == BASIC_LOAD_BYTES) ? "xdp_swap_macs_load_bytes_prog" : "xdp_swap_macs_prog";
 		break;
+	case BASIC_SWAP_IPS:
+		opts.prog_name = "xdp_swap_ipaddrs_prog";
+		break;
 	}
 
 	opts.obj = skel->obj;

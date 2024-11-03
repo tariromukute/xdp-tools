@@ -87,6 +87,22 @@ static int parse_ip_header(struct xdp_md *ctx)
 	return 0;
 }
 
+static __always_inline void swap_src_dst_ipv6(struct ipv6hdr *ipv6)
+{
+	struct in6_addr tmp = ipv6->saddr;
+
+	ipv6->saddr = ipv6->daddr;
+	ipv6->daddr = tmp;
+}
+
+static __always_inline void swap_src_dst_ipv4(struct iphdr *iphdr)
+{
+	__be32 tmp = iphdr->saddr;
+
+	iphdr->saddr = iphdr->daddr;
+	iphdr->daddr = tmp;
+}
+
 static int record_stats(__u32 rxq_idx, bool success)
 {
 	__u32 key = bpf_get_smp_processor_id();
@@ -205,10 +221,48 @@ int xdp_swap_macs_load_bytes_prog(struct xdp_md *ctx)
 		return err;
 
 	if (record_stats(ctx->rx_queue_index, true))
-		return XDP_ABORTED;
+		 return XDP_ABORTED;
 
 	return action;
 }
+
+SEC("xdp")
+int xdp_swap_ipaddrs_prog(struct xdp_md *ctx)
+{
+	void *data_end = (void *)(long)ctx->data_end;
+	void *data = (void *)(long)ctx->data;
+	struct ethhdr *eth = data;
+	// __u64 nh_off;
+	int eth_type, ip_type;
+	struct iphdr *iphdr;
+	struct ipv6hdr *ipv6hdr;
+
+
+	struct hdr_cursor nh = { .pos = data };
+
+	eth_type = parse_ethhdr(&nh, data_end, &eth);
+	if (eth_type < 0)
+		return eth_type;
+
+	swap_src_dst_mac(data);
+
+	if (eth_type == bpf_htons(ETH_P_IP)) {
+		ip_type = parse_iphdr(&nh, data_end, &iphdr);
+		if (ip_type < 0)
+			return XDP_ABORTED;
+		swap_src_dst_ipv4(iphdr);
+	} else if (eth_type == bpf_htons(ETH_P_IPV6)) {
+		ip_type = parse_ip6hdr(&nh, data_end, &ipv6hdr);
+		if (ip_type < 0)
+			return XDP_ABORTED;
+		swap_src_dst_ipv6(ipv6hdr);
+	}
+
+	if (record_stats(ctx->rx_queue_index, true))
+		return XDP_ABORTED;
+
+	return action;
+} 
 
 SEC("xdp")
 int xdp_parse_prog(struct xdp_md *ctx)
