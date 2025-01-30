@@ -46,6 +46,10 @@ struct redirect_opts {
 	enum xdp_attach_mode mode;
 	struct iface iface_in;
 	struct iface iface_out;
+	struct mac_addr dst_mac;
+	struct mac_addr src_mac;
+	struct ip_addr dst_ip;
+	struct ip_addr src_ip;	
 };
 
 struct devmap_opts {

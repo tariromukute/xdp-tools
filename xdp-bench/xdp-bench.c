@@ -133,6 +133,22 @@ struct prog_option redirect_basic_options[] = {
 		      .metavar = "<ifname_out>",
 		      .required = true,
 		      .help = "Redirect to device <ifname>"),
+	DEFINE_OPTION("dst-mac", OPT_MACADDR, struct redirect_opts, dst_mac,
+		      .short_opt = 'm',
+		      .metavar = "<mac addr>",
+		      .help = "Destination MAC address of generated packets"),
+	DEFINE_OPTION("src-mac", OPT_MACADDR, struct redirect_opts, src_mac,
+		      .short_opt = 'M',
+		      .metavar = "<mac addr>",
+		      .help = "Source MAC address of generated packets"),
+	DEFINE_OPTION("dst-addr", OPT_IPADDR, struct redirect_opts, dst_ip,
+		      .short_opt = 'a',
+		      .metavar = "<addr>",
+		      .help = "Destination IP address of generated packets"),
+	DEFINE_OPTION("src-addr", OPT_IPADDR, struct redirect_opts, src_ip,
+		      .short_opt = 'A',
+		      .metavar = "<addr>",
+		      .help = "Source IP address of generated packets"),
 	END_OPTIONS
 };
 
