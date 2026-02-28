@@ -100,6 +100,39 @@ class DirectBase:
         self.drop_generic(self.get_device().inet6, "ip", use_inet6=True)
 
 
+class EthTypeBase:
+    def ethtype_generic(self, ethtype_hex):
+        """Test filtering by EtherType."""
+        to_send = self.to_send
+
+        self.arrived(to_send, self.send_packets(to_send))
+
+        subprocess.run([XDP_FILTER, "ethtype", ethtype_hex])
+
+        self.not_arrived(to_send, self.send_packets(to_send))
+
+        subprocess.run([XDP_FILTER, "ethtype", ethtype_hex, "--remove"])
+
+        self.arrived(to_send, self.send_packets(to_send))
+
+    def test_ethtype_ipv4(self):
+        # 0x0800 = IPv4
+        self.ethtype_generic("0800")
+
+    def test_ethtype_no_match(self):
+        # 0x88cc = LLDP, should not match our test IPv4 traffic
+        to_send = self.to_send
+
+        self.arrived(to_send, self.send_packets(to_send))
+
+        subprocess.run([XDP_FILTER, "ethtype", "88cc"])
+
+        # Traffic should still arrive since it's IPv4, not LLDP
+        self.arrived(to_send, self.send_packets(to_send))
+
+        subprocess.run([XDP_FILTER, "ethtype", "88cc", "--remove"])
+
+
 class BaseSrc:
     def get_device(self):
         return self.get_contexts().get_remote_main()
@@ -176,6 +209,14 @@ class DirectTxSrc(Base, DirectBase, BaseSrc, BaseTx):
 
 
 class DirectTxDst(Base, DirectBase, BaseDst, BaseTx):
+    pass
+
+
+class EthTypeDropDst(Base, EthTypeBase):
+    pass
+
+
+class EthTypeTx(Base, EthTypeBase, BaseTx):
     pass
 
 
@@ -294,6 +335,10 @@ class Status(Base):
         self.check_status("ether", self.get_contexts().get_local_main().ether)
         self.check_status("ip", self.get_contexts().get_local_main().inet)
         self.check_status("port", str(self.dst_port))
+
+    def test_ethtype_feature(self):
+        self.load("ethtype")
+        self.check_status("ethtype", "0800")
 
     def check_status(self, subcommand, address):
         self.assertEqual(self.get_status().find(address), -1)

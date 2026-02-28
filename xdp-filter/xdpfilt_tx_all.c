@@ -6,5 +6,6 @@
 #define FILT_MODE_IPV6
 #define FILT_MODE_UDP
 #define FILT_MODE_TCP
+#define FILT_MODE_ETHTYPE
 #define FUNCNAME xdpfilt_tx_all
 #include "xdpfilt_prog.h"

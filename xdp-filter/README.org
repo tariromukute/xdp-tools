@@ -26,6 +26,7 @@ Where COMMAND can be one of:
        port        - add a port to the filter list
        ip          - add an IP address to the filter list
        ether       - add an Ethernet MAC address to the filter list
+       ethtype     - add an EtherType to the filter list
        status      - show current xdp-filter status
        poll        - poll statistics output
        help        - show the list of available commands
@@ -75,6 +76,7 @@ specify one or more of these:
  * *ipv6*: Support filtering on IPv6 addresses
  * *ipv4*: Support filtering on IPv4 addresses
  * *ethernet*: Support filtering on Ethernet MAC addresses
+ * *ethtype*: Support filtering on EtherType (Ethernet protocol type)
 
 Specify multiple features by separating them with a comma. E.g.: =tcp,udp,ipv6=.
 
@@ -217,6 +219,32 @@ Enable debug logging. Specify twice for even more verbosity.
 ** -h, --help
 Display a summary of the available options
 
+* The ETHTYPE command
+Use the =ethtype= command to add an EtherType (Ethernet protocol type) to the
+=xdp-filter= match list. For this to work, =xdp-filter= must be loaded with the
+*ethtype* feature on at least one interface.
+
+The syntax for the =ethtype= command is:
+
+=xdp-filter ethtype [options] <ethtype>=
+
+Where =<ethtype>= is the EtherType value in hexadecimal to add (or remove if the
+*--remove* is specified). Common values include =0800= (IPv4), =0806= (ARP), and
+=86dd= (IPv6). The supported options are:
+
+** -r, --remove
+Remove the EtherType instead of adding it.
+
+** -s, --status
+If this option is specified, the current list of matched EtherTypes will be
+printed after inserting the EtherType. Otherwise, nothing will be printed.
+
+** -v, --verbose
+Enable debug logging. Specify twice for even more verbosity.
+
+** -h, --help
+Display a summary of the available options
+
 * The STATUS command
 The =status= command prints the current status of =xdp-filter=: Which interfaces
 it is loaded on, the current list of rules, and some statistics for how many
@@ -289,6 +317,20 @@ To bounce all traffic arriving on port 80 back out the interface (TX mode):
 #+begin_src sh
 # xdp-filter load eth0 -f tcp,udp -p tx
 # xdp-filter port 80
+#+end_src
+
+To filter all IPv4 traffic by EtherType:
+
+#+begin_src sh
+# xdp-filter load eth0 -f ethtype
+# xdp-filter ethtype 0800
+#+end_src
+
+To bounce all ARP traffic back out the interface using TX mode:
+
+#+begin_src sh
+# xdp-filter load eth0 -f ethtype -p tx
+# xdp-filter ethtype 0806
 #+end_src
 
 * BUGS

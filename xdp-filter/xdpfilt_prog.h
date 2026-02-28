@@ -206,6 +206,34 @@ static int __always_inline lookup_verdict_ethernet(struct ethhdr *eth)
 #define CHECK_VERDICT_ETHERNET(param)
 #endif /* FILT_MODE_ETHERNET */
 
+#ifdef FILT_MODE_ETHTYPE
+struct {
+	__uint(type, BPF_MAP_TYPE_PERCPU_HASH);
+	__uint(max_entries, 256);
+	__type(key, __u16);
+	__type(value, __u64);
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
+} MAP_NAME_ETHTYPE SEC(".maps");
+
+static int __always_inline lookup_verdict_ethtype(__u16 eth_type)
+{
+	__u64 *value;
+
+	value = bpf_map_lookup_elem(&filter_ethtype, &eth_type);
+	if (value) {
+		*value += (1 << COUNTER_SHIFT);
+		return VERDICT_HIT;
+	}
+	return VERDICT_MISS;
+}
+
+#define CHECK_VERDICT_ETHTYPE(param) CHECK_VERDICT(ethtype, param)
+#define FEATURE_ETHTYPE FEAT_ETHTYPE
+#else
+#define FEATURE_ETHTYPE 0
+#define CHECK_VERDICT_ETHTYPE(param)
+#endif /* FILT_MODE_ETHTYPE */
+
 #ifndef FUNCNAME
 #define FUNCNAME xdp_filt_unknown
 #endif
@@ -228,6 +256,7 @@ int FUNCNAME(struct xdp_md *ctx)
 	nh.pos = data;
 	eth_type = parse_ethhdr(&nh, data_end, &eth);
 	CHECK_RET(eth_type);
+	CHECK_VERDICT_ETHTYPE(eth_type);
 	CHECK_VERDICT_ETHERNET(eth);
 
 #if defined(FILT_MODE_IPV4) || defined(FILT_MODE_IPV6) || \
@@ -314,7 +343,8 @@ out:
 }
 
 char _license[] SEC("license") = "GPL";
-__u32 _features SEC("features") = (FEATURE_ETHERNET | FEATURE_IPV4 |
+__u32 _features SEC("features") = (FEATURE_ETHERNET | FEATURE_ETHTYPE |
+				   FEATURE_IPV4 |
 				   FEATURE_IPV6 | FEATURE_UDP | FEATURE_TCP |
 				   FEATURE_OPMODE);
 

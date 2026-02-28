@@ -199,6 +199,7 @@ struct flag_val load_features[] = {
 	{"ipv6", FEAT_IPV6},
 	{"ipv4", FEAT_IPV4},
 	{"ethernet", FEAT_ETHERNET},
+	{"ethtype", FEAT_ETHTYPE},
 	{"all", FEAT_ALL},
 	{}
 };
@@ -209,6 +210,7 @@ struct flag_val print_features[] = {
 	{"ipv6", FEAT_IPV6},
 	{"ipv4", FEAT_IPV4},
 	{"ethernet", FEAT_ETHERNET},
+	{"ethtype", FEAT_ETHTYPE},
 	{"allow", FEAT_ALLOW},
 	{"deny", FEAT_DENY},
 	{"tx", FEAT_TX},
@@ -391,6 +393,12 @@ static int remove_unused_maps(const char *pin_root_path, __u32 features)
 
 	if (!(features & FEAT_ETHERNET)) {
 		err = unlink_pinned_map(dir_fd, textify(MAP_NAME_ETHERNET));
+		if (err)
+			goto out;
+	}
+
+	if (!(features & FEAT_ETHTYPE)) {
+		err = unlink_pinned_map(dir_fd, textify(MAP_NAME_ETHTYPE));
 		if (err)
 			goto out;
 	}
@@ -940,6 +948,180 @@ out:
 	return err;
 }
 
+static const char *ethtype_name(__u16 ethtype)
+{
+	switch (ethtype) {
+	case ETH_P_IP:
+		return "ipv4";
+	case ETH_P_ARP:
+		return "arp";
+	case ETH_P_IPV6:
+		return "ipv6";
+	case ETH_P_8021Q:
+		return "vlan";
+	case ETH_P_8021AD:
+		return "qinq";
+	default:
+		return NULL;
+	}
+}
+
+static int ethtype_get_counter(int fd, void *key, __u64 *counter)
+{
+	int nr_cpus = libbpf_num_possible_cpus();
+	__u64 sum_ctr = 0;
+	int i, err = 0;
+	__u64 *values;
+
+	if (nr_cpus < 0)
+		return nr_cpus;
+
+	values = calloc(nr_cpus, sizeof(*values));
+	if (!values)
+		return -ENOMEM;
+
+	if ((bpf_map_lookup_elem(fd, key, values)) != 0) {
+		err = -ENOENT;
+		goto out;
+	}
+
+	for (i = 0; i < nr_cpus; i++)
+		sum_ctr += values[i] >> COUNTER_SHIFT;
+	*counter = sum_ctr;
+
+out:
+	free(values);
+	return err;
+}
+
+static int ethtype_set(int fd, __u16 *key, bool add)
+{
+	int nr_cpus = libbpf_num_possible_cpus();
+	__u64 *values;
+	int err;
+
+	if (nr_cpus < 0)
+		return nr_cpus;
+
+	if (!add) {
+		err = bpf_map_delete_elem(fd, key);
+		if (err) {
+			err = -errno;
+			pr_warn("Couldn't delete ethtype entry: %s\n",
+				strerror(-err));
+		}
+		return err;
+	}
+
+	values = calloc(nr_cpus, sizeof(*values));
+	if (!values)
+		return -ENOMEM;
+
+	err = bpf_map_update_elem(fd, key, values, 0);
+	if (err) {
+		err = -errno;
+		if (err == -E2BIG)
+			pr_warn("Couldn't add entry: ethtype map is full\n");
+		else
+			pr_warn("Unable to update ethtype map: %s\n",
+				strerror(-err));
+	}
+
+	free(values);
+	return err;
+}
+
+int print_ethtypes(int map_fd)
+{
+	__u16 map_key = 0, prev_key = 0;
+	int err;
+
+	printf("Filtered EtherTypes:\n");
+	printf("  %-20s %-20s Hit counter\n", "EtherType", "Name");
+	FOR_EACH_MAP_KEY (err, map_fd, map_key, prev_key) {
+		const char *name;
+		__u64 counter = 0;
+
+		err = ethtype_get_counter(map_fd, &map_key, &counter);
+		if (err == -ENOENT)
+			continue;
+		else if (err)
+			return err;
+
+		name = ethtype_name(ntohs(map_key));
+		printf("  0x%04x              %-20s %" PRIu64 "\n",
+		       ntohs(map_key), name ? name : "unknown",
+		       (uint64_t)counter);
+	}
+	return 0;
+}
+
+static const struct ethtypeopt {
+	__u16 ethtype;
+	bool print_status;
+	bool remove;
+} defaults_ethtype = {};
+
+static struct prog_option ethtype_options[] = {
+	DEFINE_OPTION("ethtype", OPT_U16, struct ethtypeopt, ethtype,
+		      .positional = true,
+		      .metavar = "<ethtype>",
+		      .required = true,
+		      .hex = true,
+		      .help = "EtherType to add or remove (hex, e.g. 0800 for IPv4)"),
+	DEFINE_OPTION("remove", OPT_BOOL, struct ethtypeopt, remove,
+		      .short_opt = 'r',
+		      .help = "Remove EtherType instead of adding"),
+	DEFINE_OPTION("status", OPT_BOOL, struct ethtypeopt, print_status,
+		      .short_opt = 's',
+		      .help = "Print status of filtered EtherTypes after changing"),
+	END_OPTIONS
+};
+
+static int do_ethtype(const void *cfg, const char *pin_root_path)
+{
+	int map_fd = -1, err = EXIT_SUCCESS, lock_fd;
+	const struct ethtypeopt *opt = cfg;
+	const char *name;
+	__u16 map_key;
+
+	lock_fd = prog_lock_acquire(pin_root_path);
+	if (lock_fd < 0)
+		return lock_fd;
+
+	map_fd = get_pinned_map_fd(pin_root_path, textify(MAP_NAME_ETHTYPE), NULL);
+	if (map_fd < 0) {
+		pr_warn("Couldn't find ethtype filter map; is xdp-filter loaded "
+			"with the ethtype feature?\n");
+		err = EXIT_FAILURE;
+		goto out;
+	}
+
+	map_key = htons(opt->ethtype);
+
+	name = ethtype_name(opt->ethtype);
+	pr_debug("%s ethtype 0x%04x%s%s%s\n",
+		 opt->remove ? "Removing" : "Adding",
+		 opt->ethtype,
+		 name ? " (" : "", name ? name : "", name ? ")" : "");
+
+	err = ethtype_set(map_fd, &map_key, !opt->remove);
+	if (err)
+		goto out;
+
+	if (opt->print_status) {
+		err = print_ethtypes(map_fd);
+		if (err)
+			goto out;
+	}
+
+out:
+	if (map_fd >= 0)
+		close(map_fd);
+	prog_lock_release(lock_fd);
+	return err;
+}
+
 static struct prog_option status_options[] = { END_OPTIONS };
 
 int print_iface_status(const struct iface *iface, struct xdp_program *prog,
@@ -1031,6 +1213,15 @@ int do_status(__unused const void *cfg, const char *pin_root_path)
 
 	printf("\n");
 
+	map_fd = get_pinned_map_fd(pin_root_path, textify(MAP_NAME_ETHTYPE), NULL);
+	if (map_fd >= 0) {
+		err = print_ethtypes(map_fd);
+		if (err)
+			goto out;
+	}
+
+	printf("\n");
+
 out:
 	if (map_fd >= 0)
 		close(map_fd);
@@ -1097,6 +1288,7 @@ int do_help(__unused const void *cfg, __unused const char *pin_root_path)
 		"       port        - add a port to the filter list\n"
 		"       ip          - add an IP address to the filter list\n"
 		"       ether       - add an Ethernet MAC address to the filter list\n"
+		"       ethtype     - add an EtherType to the filter list\n"
 		"       status      - show current xdp-filter status\n"
 		"       poll        - poll statistics output\n"
 		"       help        - show this help message\n"
@@ -1111,6 +1303,7 @@ static const struct prog_command cmds[] = {
 	DEFINE_COMMAND(port, "Add or remove ports from xdp-filter"),
 	DEFINE_COMMAND(ip, "Add or remove IP addresses from xdp-filter"),
 	DEFINE_COMMAND(ether, "Add or remove MAC addresses from xdp-filter"),
+	DEFINE_COMMAND(ethtype, "Add or remove EtherTypes from xdp-filter"),
 	DEFINE_COMMAND(poll, "Poll xdp-filter statistics"),
 	DEFINE_COMMAND_NODEF(status, "Show xdp-filter status"),
 	{ .name = "help", .func = do_help, .no_cfg = true },
@@ -1123,6 +1316,7 @@ union all_opts {
 	struct portopt port;
 	struct ipopt ip;
 	struct etheropt ether;
+	struct ethtypeopt ethtype;
 	struct pollopt poll;
 };
 

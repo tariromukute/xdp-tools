@@ -21,6 +21,7 @@ Where COMMAND can be one of:
        port        - add a port to the filter list
        ip          - add an IP address to the filter list
        ether       - add an Ethernet MAC address to the filter list
+       ethtype     - add an EtherType to the filter list
        status      - show current xdp-filter status
        poll        - poll statistics output
        help        - show the list of available commands
@@ -84,6 +85,8 @@ specify one or more of these:
 \fBipv4\fP: Support filtering on IPv4 addresses
 .IP \(bu 4
 \fBethernet\fP: Support filtering on Ethernet MAC addresses
+.IP \(bu 4
+\fBethtype\fP: Support filtering on EtherType (Ethernet protocol type)
 
 .PP
 Specify multiple features by separating them with a comma. E.g.: \fItcp,udp,ipv6\fP.
@@ -238,6 +241,35 @@ Enable debug logging. Specify twice for even more verbosity.
 .SS "-h, --help"
 .PP
 Display a summary of the available options
+.SH "The ETHTYPE command"
+.PP
+Use the \fIethtype\fP command to add an EtherType (Ethernet protocol type) to the
+\fIxdp\-filter\fP match list. For this to work, \fIxdp\-filter\fP must be loaded with
+the \fBethtype\fP feature on at least one interface.
+
+.PP
+The syntax for the \fIethtype\fP command is:
+
+.PP
+\fIxdp\-filter ethtype [options] <ethtype>\fP
+
+.PP
+Where \fI<ethtype>\fP is the EtherType value in hexadecimal to add (or remove if
+the \fB--remove\fP is specified). Common values include \fI0800\fP (IPv4),
+\fI0806\fP (ARP), and \fI86dd\fP (IPv6). The supported options are:
+.SS "-r, --remove"
+.PP
+Remove the EtherType instead of adding it.
+.SS "-s, --status"
+.PP
+If this option is specified, the current list of matched EtherTypes will be
+printed after inserting the EtherType. Otherwise, nothing will be printed.
+.SS "-v, --verbose"
+.PP
+Enable debug logging. Specify twice for even more verbosity.
+.SS "-h, --help"
+.PP
+Display a summary of the available options
 .SH "The STATUS command"
 .PP
 The \fIstatus\fP command prints the current status of \fIxdp\-filter\fP: Which interfaces
@@ -329,6 +361,28 @@ To bounce all traffic arriving on port 80 back out the interface (TX mode):
 .nf
 \fC# xdp-filter load eth0 -f tcp,udp -p tx
 # xdp-filter port 80
+\fP
+.fi
+.RE
+
+.PP
+To filter all IPv4 traffic by EtherType:
+
+.RS
+.nf
+\fC# xdp-filter load eth0 -f ethtype
+# xdp-filter ethtype 0800
+\fP
+.fi
+.RE
+
+.PP
+To bounce all ARP traffic back out the interface using TX mode:
+
+.RS
+.nf
+\fC# xdp-filter load eth0 -f ethtype -p tx
+# xdp-filter ethtype 0806
 \fP
 .fi
 .RE
