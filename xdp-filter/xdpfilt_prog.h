@@ -23,7 +23,11 @@
 #include "xdp/xdp_stats_kern.h"
 #include "xdp/parsing_helpers.h"
 
-#ifdef FILT_MODE_DENY
+#ifdef FILT_MODE_TX
+#define VERDICT_HIT XDP_TX
+#define VERDICT_MISS XDP_PASS
+#define FEATURE_OPMODE FEAT_TX
+#elif defined(FILT_MODE_DENY)
 #define VERDICT_HIT XDP_PASS
 #define VERDICT_MISS XDP_DROP
 #define FEATURE_OPMODE FEAT_DENY

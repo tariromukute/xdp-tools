@@ -153,6 +153,32 @@ class DirectPassDst(Base, DirectBase, BaseDst, BaseInvert):
     pass
 
 
+class BaseTx:
+    def setUp(self):
+        subprocess.run([
+            XDP_FILTER, "load",
+            "--policy", "tx",
+            self.get_contexts().get_local_main().iface,
+            "--mode", get_mode_string(
+                self.get_contexts().get_local_main().xdp_mode
+            )
+        ])
+
+    # With TX policy, matched packets are bounced back out the ingress
+    # interface instead of being delivered locally. So matched packets
+    # should not arrive at the local destination.
+    arrived = Base.arrived
+    not_arrived = Base.not_arrived
+
+
+class DirectTxSrc(Base, DirectBase, BaseSrc, BaseTx):
+    pass
+
+
+class DirectTxDst(Base, DirectBase, BaseDst, BaseTx):
+    pass
+
+
 class IPv6ExtensionHeader(Base):
     def generic(self, extensions):
         packets = [Ether() /

@@ -211,6 +211,7 @@ struct flag_val print_features[] = {
 	{"ethernet", FEAT_ETHERNET},
 	{"allow", FEAT_ALLOW},
 	{"deny", FEAT_DENY},
+	{"tx", FEAT_TX},
 	{}
 };
 
@@ -224,6 +225,7 @@ struct enum_val xdp_modes[] = {
 struct enum_val policy_modes[] = {
        {"allow", FEAT_ALLOW},
        {"deny", FEAT_DENY},
+       {"tx", FEAT_TX},
        {NULL, 0}
 };
 
@@ -237,7 +239,7 @@ static struct prog_option load_options[] = {
 		      .short_opt = 'p',
 		      .typearg = policy_modes,
 		      .metavar = "<policy>",
-		      .help = "Policy for unmatched packets; default allow"),
+		      .help = "Policy for matched packets; default allow (allow, deny, tx)"),
 	DEFINE_OPTION("dev", OPT_IFNAME, struct loadopt, iface,
 		      .positional = true,
 		      .metavar = "<ifname>",
@@ -283,14 +285,14 @@ int do_load(const void *cfg, const char *pin_root_path)
 	err = EXIT_FAILURE;
 
 	features = opt->features;
-	if (opt->policy_mode == FEAT_DENY && used_feats & FEAT_ALLOW) {
-		pr_warn("xdp-filter is already loaded in allow policy mode. "
-			"Unload before loading in deny mode.\n");
-		goto out;
-	} else if (opt->policy_mode == FEAT_ALLOW && used_feats & FEAT_DENY) {
-		pr_warn("xdp-filter is already loaded in deny policy mode. "
-			"Unload before loading in allow mode.\n");
-		goto out;
+	{
+		__u32 policy_feats = used_feats & (FEAT_ALLOW | FEAT_DENY | FEAT_TX);
+		if (policy_feats && !(policy_feats & opt->policy_mode)) {
+			pr_warn("xdp-filter is already loaded in a different "
+				"policy mode. Unload before loading in a new "
+				"policy mode.\n");
+			goto out;
+		}
 	}
 	features |= opt->policy_mode;
 
@@ -981,6 +983,7 @@ int do_status(__unused const void *cfg, const char *pin_root_path)
 	}
 	rec.stats[XDP_DROP].enabled = true;
 	rec.stats[XDP_PASS].enabled = true;
+	rec.stats[XDP_TX].enabled = true;
 	rec.stats[XDP_ABORTED].enabled = true;
 
 	err = stats_collect(map_fd, info.type, &rec);

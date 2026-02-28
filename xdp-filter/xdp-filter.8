@@ -56,16 +56,18 @@ so-called \fIskb mode\fP (also known as \fIgeneric XDP\fP) to be used, or 'hw' w
 causes the program to be offloaded to the hardware.
 .SS "-p, --policy <policy>"
 .PP
-This sets the policy \fIxdp\-filter\fP applies to packets \fBnot\fP matched by any of the
-filter rules. The default is \fIallow\fP, in which packets not matching any rules
-are allowed to pass. The other option is \fIdeny\fP, in which \fBall\fP packets are
-dropped \fBexcept\fP those matched by the filter options.
+This sets the policy \fIxdp\-filter\fP applies to packets matched by the filter
+rules. The valid values are:
+.IP \(bu 4
+\fBallow\fP (default): Matched packets are dropped (XDP_DROP), unmatched packets pass through.
+.IP \(bu 4
+\fBdeny\fP: All packets are dropped except those matched by the filter rules.
+.IP \(bu 4
+\fBtx\fP: Matched packets are bounced back out the ingress interface (XDP_TX), unmatched packets pass through.
 
 .PP
-\fIxdp\-filter\fP cannot be loaded simultaneously in \fIdeny\fP and \fIallow\fP policy modes
-on the system. Note that loading \fIxdp\-filter\fP in \fIdeny\fP mode will drop all
-traffic on the interface until suitable allow rules are installed, so some care
-is needed to avoid being locked out of a remote system.
+\fIxdp\-filter\fP cannot be loaded simultaneously in different policy modes on the
+system. Unload xdp-filter before switching to a different policy mode.
 .SS "-f, --features <feats>"
 .PP
 Use this option to select which features to include when loaded \fIxdp\-filter\fP.
@@ -316,6 +318,17 @@ issue the following (careful, this can lock you out of remote access!):
 \fC# xdp-filter load eth0 -f ipv6,tcp -p deny
 # xdp-filter port 22
 # xdp-filter ip fc00:dead:cafe::1 -m src
+\fP
+.fi
+.RE
+
+.PP
+To bounce all traffic arriving on port 80 back out the interface (TX mode):
+
+.RS
+.nf
+\fC# xdp-filter load eth0 -f tcp,udp -p tx
+# xdp-filter port 80
 \fP
 .fi
 .RE

@@ -31,6 +31,7 @@ RUN apt-get update && apt-get install -y \
     libbpf1 \
     libcap2 \
     bpftool \
+    iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local /usr/local
