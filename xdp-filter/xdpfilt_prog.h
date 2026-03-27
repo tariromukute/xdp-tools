@@ -227,7 +227,24 @@ static int __always_inline lookup_verdict_ethtype(__u16 eth_type)
 	return VERDICT_MISS;
 }
 
+#ifdef FILT_MODE_TX
+/* In TX mode, intercept NSH packets (EtherType 0x894F) to decrement
+ * the Service Index (SI) before transmitting back out the interface.
+ * This implements basic NSH Service Function behaviour per RFC 8300.
+ */
+#include "nsh.h"
+#define CHECK_VERDICT_ETHTYPE(param)                                          \
+	do {                                                                  \
+		if ((action = lookup_verdict_ethtype(param)) != VERDICT_MISS) { \
+			if ((param) == bpf_htons(ETH_P_NSH))                 \
+				nsh_dec_si(&nh, data_end);                    \
+			goto out;                                             \
+		}                                                             \
+	} while (0)
+#else
 #define CHECK_VERDICT_ETHTYPE(param) CHECK_VERDICT(ethtype, param)
+#endif
+
 #define FEATURE_ETHTYPE FEAT_ETHTYPE
 #else
 #define FEATURE_ETHTYPE 0
