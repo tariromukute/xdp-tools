@@ -32,6 +32,7 @@ RUN apt-get update && apt-get install -y \
     libcap2 \
     bpftool \
     iputils-ping \
+    ethtool \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local /usr/local
